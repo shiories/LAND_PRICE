@@ -42,6 +42,9 @@ class RealEstateAnalyzer:
 
 
     def real_estate_crawler(self, year, season):
+        if not os.path.exists("data"):
+            os.makedirs("data")
+        
         if year > 1000:
             year -= 1911
 
@@ -56,7 +59,9 @@ class RealEstateAnalyzer:
         with zipfile.ZipFile(fname, 'r') as zip_ref:
             zip_ref.extractall(folder)
 
-        time.sleep(10)
+        os.remove(fname)  # 刪除原始的 ZIP 檔案
+        os.chdir("data")  # 更改當前工作目錄到 data 資料夾中
+        time.sleep(3)
 
 
     def read_real_estate_data(self, type_name = str('房屋買賣交易')):
@@ -79,7 +84,7 @@ class RealEstateAnalyzer:
             for code, city in self.city_codes.items():
                 # 讀取每個資料夾中的'a_lvr_land_a.csv'檔，並將其載入為DataFrame
                 try:
-                    df = pd.read_csv(os.path.join(d, f'{code}_lvr_land_{self.type}.csv'), index_col=False, low_memory=False)
+                    df = pd.read_csv(os.path.join(d, f'data/{code}_lvr_land_{self.type}.csv'), index_col=False, low_memory=False)
                     # 將資料夾名稱的最後一個字元添加到DataFrame中的'Q'列中
                     df['season'] = d[-1:]
                     df["縣市"] = city
