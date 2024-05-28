@@ -23,20 +23,20 @@ class RealEstateAnalyzer:
             'i': '嘉義市',
             'j': '新竹縣',
             'k': '苗栗縣',
-            'l': '台中縣',
+            #'l': '台中縣',
             'm': '南投縣',
             'n': '彰化縣',
             'o': '新竹市',
             'p': '雲林縣',
             'q': '嘉義縣',
-            'r': '台南縣',
-            's': '高雄縣',
+            #'r': '台南縣',
+            #'s': '高雄縣',
             't': '屏東縣',
             'u': '花蓮縣',
             'v': '台東縣',
             'w': '金門縣',
             'x': '澎湖縣',
-            'y': '陽明山管理局',
+            #'y': '陽明山管理局',
             'z': '連江縣'
         }
 
@@ -93,6 +93,7 @@ class RealEstateAnalyzer:
                     dfs.append(df.iloc[1:])
 
                 except:
+                    #print(f"{d[-4:]} 找不到: {code}_lvr_land_{self.type}.csv")
                     pass
 
                 
@@ -258,19 +259,13 @@ class RealEstateAnalyzer:
 if __name__ == "__main__":
     analyzer = RealEstateAnalyzer()
     #analyzer.real_estate_crawler(101, 3)   # 取得特定季資料
-    #analyzer.get_range(105, 112)  # 取得特定範圍資料
+    #analyzer.get_range(101, 104)  # 取得特定範圍資料
 
     all_data_1 = analyzer.read_real_estate_data(type_name="中古屋") #建立各季度 json檔
-    all_data_2 = analyzer.read_real_estate_data(type_name="新成屋") #建立各季度 json檔
+    #all_data_2 = analyzer.read_real_estate_data(type_name="新成屋") #建立各季度 json檔
     #all_data_3 = analyzer.read_real_estate_data(type_name="租賃屋") #建立各季度 json檔
 
     #analyzer.plot_price_trend(df)    # 繪製房價走勢圖
     #analyzer.plot_price_distribution(df)    # 繪製房價分佈圖
 
-    all_data = pd.concat([all_data_1, all_data_2], ignore_index=True)  # 將當前季度的資料添加到all_data中
-    #all_data = pd.concat([all_data, all_data_3], ignore_index=True)  # 將當前季度的資料添加到all_data中
-
-    print(all_data.info())
-    all_data.to_json(f'all_data.json', orient='records', indent=4)
-    all_data.to_excel(f'all_data.xlsx')
 
