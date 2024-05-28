@@ -63,27 +63,30 @@ class RealEstateAnalyzer:
         time.sleep(3)
 
 
-    def read_real_estate_data(self, type_name = str('房屋買賣交易')):
+    def read_real_estate_data(self, type_name = str('中古屋')):
         '''
-        type_name = '房屋買賣交易', '新成屋交易', '租房交易'
+        type_name = '中古屋', '新成屋', '租賃屋'
         '''
         self.type_name = type_name
         # 检查文件夹是否存在，如果不存在则创建
         if not os.path.exists(self.type_name):
             os.makedirs(self.type_name)
 
-        self.real_estate_file_types = { '房屋買賣交易': 'a', '新成屋交易': 'b', '租房交易': 'c' }
+        self.real_estate_file_types = { '中古屋': 'a', '新成屋': 'b', '租賃屋': 'c' }
         self.type = self.real_estate_file_types.get(self.type_name)
         # 獲取目前的目錄下以'real'開頭的資料夾清單
         dirs = ['data/'+d for d in os.listdir('data/') if d[:4] == 'real']
         all_data = pd.DataFrame()
         for d in dirs:
             dfs = []
+
             for code, city in self.city_codes.items():
                 # 讀取每個資料夾中的'a_lvr_land_a.csv'檔，並將其載入為DataFrame
                 try:
                     df = pd.read_csv(os.path.join(d, f'{code}_lvr_land_{self.type}.csv'), index_col=False, low_memory=False)
                     # 將資料夾名稱的最後一個字元添加到DataFrame中的'Q'列中
+                    #df['type'] = self.type_name
+                    df['year'] = int(d[-4:-1]) + 1911
                     df['season'] = d[-1:]
                     df["縣市"] = city
                     # 將DataFrame添加到dfs列表中
@@ -91,23 +94,25 @@ class RealEstateAnalyzer:
 
                 except:
                     pass
+
                 
             data_df = pd.concat(dfs, sort=True)# 將所有DataFrame連接成一個DataFrame
             data_df.reset_index(drop=True, inplace=True) # 重設索引，確保索引唯一
             try:
                 data_df = self.preprocess_data(data_df) # 資料清理
-            except:
-                print(f"錯誤季度: {d[-4:]}")
+            except Exception as e:
+                print(f"{self.type_name} 錯誤季度: {d[-4:]}")
+                print(e)
 
             data_df.to_json(f'{self.type_name}/{d[-4:]}.json', orient='records', indent=4)
             #data_df.to_excel(f'type_name/{d[-4:]}.xlsx')
-            print(f"季度 {d[-4:]} 已完成")
+            print(f"{self.type_name} 季度 {d[-4:]} 已完成")
             all_data = pd.concat([all_data, data_df], ignore_index=True)  # 將當前季度的資料添加到all_data中
 
                     
         all_data.to_json(f'{self.type_name}/all_data.json', orient='records', indent=4)
         print(all_data.info())
-        return
+        return all_data
         
 
     def chinese_to_arabic(self, chinese_num):
@@ -151,16 +156,29 @@ class RealEstateAnalyzer:
         df = df[df['備註'].isnull()]  # 刪除有備註之交易（多為親友交易、價格不正常之交易）
 
         # 單位換算
-        df['year'] = df['交易年月日'][:-4].astype(int) + 1911
         df['每坪單價'] = df['單價元平方公尺'].astype(float) * 3.30579 # 平方公尺換成坪
-        df['土地坪數'] = df['土地移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
-        df['建物坪數'] = df['建物移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+
+        try:
+            df['土地坪數'] = df['土地移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+        except:
+            df['土地坪數'] = df['土地面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+
+        try:
+            df['建物坪數'] = df['建物移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+        except:
+            df['建物坪數'] = df['建物總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+
         try:
             df['車位坪數'] = df['車位移轉總面積(平方公尺)'].astype(float) * 0.3025 # 平方公尺換成坪
         except:
-            df['車位坪數'] = df['車位移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
-        df['陽台坪數'] = df['陽台面積'].astype(float) * 0.3025 # 平方公尺換成坪
-        df['附屬建物坪數'] = df['附屬建物面積'].astype(float) * 0.3025 # 平方公尺換成坪
+            try:
+                df['車位坪數'] = df['車位移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+            except:
+                df['車位坪數'] = df['車位面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
+
+    
+        #df['陽台坪數'] = df['陽台面積'].astype(float) * 0.3025 # 平方公尺換成坪
+        #df['附屬建物坪數'] = df['附屬建物面積'].astype(float) * 0.3025 # 平方公尺換成坪
         df['屋齡'] = df['建築完成年月'].apply(self.calculate_building_age)
 
         # 型別轉換
@@ -171,16 +189,22 @@ class RealEstateAnalyzer:
         df['都市土地使用分區'] = df['都市土地使用分區'].fillna("特")
 
         # 刪除列
-        df = df.drop(columns=['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']).copy()               
+        for col in ['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']:
+            try:
+                df.drop(columns=[col])
+            except:
+                pass
+                    
+        #df = df.drop(columns=['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']).copy()               
         df = df.rename(columns={'建物現況格局-隔間': '隔間', '有無管理組織': '管理組織', '建物現況格局-廳': '廳數',
                                 '建物現況格局-房': '房數', '建物現況格局-衛': '衛數', '都市土地使用分區': '土地類型'})
         # 將index改成年月日
-        df.index = pd.to_datetime((df['交易年月日'][:-4].astype(int) + 1911).astype(str) + df['交易年月日'].str[-4:], format='%Y%m%d', errors='coerce')
+        #df.index = pd.to_datetime((df['交易年月日'][:-4].astype(int) + 1911).astype(str) + df['交易年月日'].str[-4:], format='%Y%m%d', errors='coerce')
         df = df[[
             'year', 'season', '縣市', '鄉鎮市區','土地類型',
             '土地位置建物門牌',  '編號', '建物型態', '屋齡', '主要建材', 
             '管理組織', '總樓層數', '房數', '廳數', '衛數',
-            '隔間', '土地坪數', '建物坪數', '附屬建物坪數', '陽台坪數',
+            '隔間', '土地坪數', '建物坪數',# '附屬建物坪數', '陽台坪數',
             '總價元', '車位坪數', '車位總價元', '車位類別'
         ]]
         return df
@@ -236,7 +260,17 @@ if __name__ == "__main__":
     #analyzer.real_estate_crawler(101, 3)   # 取得特定季資料
     #analyzer.get_range(105, 112)  # 取得特定範圍資料
 
-    analyzer.read_real_estate_data(type_name="房屋買賣交易") #建立各季度 json檔
+    all_data_1 = analyzer.read_real_estate_data(type_name="中古屋") #建立各季度 json檔
+    all_data_2 = analyzer.read_real_estate_data(type_name="新成屋") #建立各季度 json檔
+    #all_data_3 = analyzer.read_real_estate_data(type_name="租賃屋") #建立各季度 json檔
 
     #analyzer.plot_price_trend(df)    # 繪製房價走勢圖
     #analyzer.plot_price_distribution(df)    # 繪製房價分佈圖
+
+    all_data = pd.concat([all_data_1, all_data_2], ignore_index=True)  # 將當前季度的資料添加到all_data中
+    #all_data = pd.concat([all_data, all_data_3], ignore_index=True)  # 將當前季度的資料添加到all_data中
+
+    print(all_data.info())
+    all_data.to_json(f'all_data.json', orient='records', indent=4)
+    all_data.to_excel(f'all_data.xlsx')
+
