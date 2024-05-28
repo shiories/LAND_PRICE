@@ -44,7 +44,7 @@ class RealEstateAnalyzer:
     def real_estate_crawler(self, year, season):
         if not os.path.exists("data"):
             os.makedirs("data")
-        
+
         if year > 1000:
             year -= 1911
 
@@ -54,13 +54,12 @@ class RealEstateAnalyzer:
 
         folder = 'real_estate' + str(year) + str(season)
         if not os.path.isdir(folder):
-            os.mkdir(folder)
+            os.mkdir('data/' + folder)
 
         with zipfile.ZipFile(fname, 'r') as zip_ref:
-            zip_ref.extractall(folder)
+            zip_ref.extractall('data/' + folder)
 
         os.remove(fname)  # 刪除原始的 ZIP 檔案
-        os.chdir("data")  # 更改當前工作目錄到 data 資料夾中
         time.sleep(3)
 
 
@@ -73,18 +72,17 @@ class RealEstateAnalyzer:
         if not os.path.exists(self.type_name):
             os.makedirs(self.type_name)
 
-        self.real_estate_file_types = { 'a': '房屋買賣交易', 'b': '新成屋交易', 'c': '租房交易' }
-        self.type = self.real_estate_file_types[self.type_name]
-
+        self.real_estate_file_types = { '房屋買賣交易': 'a', '新成屋交易': 'b', '租房交易': 'c' }
+        self.type = self.real_estate_file_types.get(self.type_name)
         # 獲取目前的目錄下以'real'開頭的資料夾清單
-        dirs = [d for d in os.listdir() if d[:4] == 'real']
-        
+        dirs = ['data/'+d for d in os.listdir('data/') if d[:4] == 'real']
+        all_data = pd.DataFrame()
         for d in dirs:
             dfs = []
             for code, city in self.city_codes.items():
                 # 讀取每個資料夾中的'a_lvr_land_a.csv'檔，並將其載入為DataFrame
                 try:
-                    df = pd.read_csv(os.path.join(d, f'data/{code}_lvr_land_{self.type}.csv'), index_col=False, low_memory=False)
+                    df = pd.read_csv(os.path.join(d, f'{code}_lvr_land_{self.type}.csv'), index_col=False, low_memory=False)
                     # 將資料夾名稱的最後一個字元添加到DataFrame中的'Q'列中
                     df['season'] = d[-1:]
                     df["縣市"] = city
@@ -104,7 +102,11 @@ class RealEstateAnalyzer:
             data_df.to_json(f'{self.type_name}/{d[-4:]}.json', orient='records', indent=4)
             #data_df.to_excel(f'type_name/{d[-4:]}.xlsx')
             print(f"季度 {d[-4:]} 已完成")
-            
+            all_data = pd.concat([all_data, data_df], ignore_index=True)  # 將當前季度的資料添加到all_data中
+
+                    
+        all_data.to_json(f'{self.type_name}/all_data.json', orient='records', indent=4)
+        print(all_data.info())
         return
         
 
@@ -232,7 +234,7 @@ class RealEstateAnalyzer:
 if __name__ == "__main__":
     analyzer = RealEstateAnalyzer()
     #analyzer.real_estate_crawler(101, 3)   # 取得特定季資料
-    #analyzer.get_range(108, 112)  # 取得特定範圍資料
+    #analyzer.get_range(105, 112)  # 取得特定範圍資料
 
     analyzer.read_real_estate_data(type_name="房屋買賣交易") #建立各季度 json檔
 
