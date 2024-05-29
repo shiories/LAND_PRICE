@@ -109,7 +109,6 @@ class RealEstateAnalyzer:
             #data_df.to_excel(f'type_name/{d[-4:]}.xlsx')
             print(f"{self.type_name} 季度 {d[-4:]} 已完成")
             all_data = pd.concat([all_data, data_df], ignore_index=True)  # 將當前季度的資料添加到all_data中
-
                     
         all_data.to_json(f'{self.type_name}/all_data.json', orient='records', indent=4)
         print(all_data.info())
@@ -172,12 +171,12 @@ class RealEstateAnalyzer:
         try:
             df['車位坪數'] = df['車位移轉總面積(平方公尺)'].astype(float) * 0.3025 # 平方公尺換成坪
         except:
-            try:
+            try:                    
                 df['車位坪數'] = df['車位移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
             except:
                 df['車位坪數'] = df['車位面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
-
-    
+        
+        df['車位坪單價'] = df['車位總價元'].astype(int) / df['車位坪數'].astype(int)
         #df['陽台坪數'] = df['陽台面積'].astype(float) * 0.3025 # 平方公尺換成坪
         #df['附屬建物坪數'] = df['附屬建物面積'].astype(float) * 0.3025 # 平方公尺換成坪
         df['屋齡'] = df['建築完成年月'].apply(self.calculate_building_age)
@@ -187,7 +186,8 @@ class RealEstateAnalyzer:
         df['建物現況格局-隔間'] = df['建物現況格局-隔間'].map({'有': True, '無': False})
         df['有無管理組織'] = df['有無管理組織'].map({'有': True, '無': False})        
         df['總樓層數'] = df['總樓層數'].apply(self.chinese_to_arabic)        # 將"總樓層數"列應用轉換函數
-        df['都市土地使用分區'] = df['都市土地使用分區'].fillna("特")
+        df['都市土地使用分區'] = df['都市土地使用分區'].str.replace('[^\u4e00-\u9fff]+', '').str.split('其他:').str[-1].str.replace(r'\([^()]*\)', '').fillna("特")
+        df['都市土地使用分區'] = df['都市土地使用分區'].replace(df['都市土地使用分區'].value_counts()[df['都市土地使用分區'].value_counts() < 100].index, '特')
 
         # 刪除列
         for col in ['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']:
@@ -202,11 +202,11 @@ class RealEstateAnalyzer:
         # 將index改成年月日
         #df.index = pd.to_datetime((df['交易年月日'][:-4].astype(int) + 1911).astype(str) + df['交易年月日'].str[-4:], format='%Y%m%d', errors='coerce')
         df = df[[
-            'year', 'season', '縣市', '鄉鎮市區','土地類型',
+            'year', 'season', '縣市', '鄉鎮市區','土地類型','每坪單價',
             '土地位置建物門牌',  '編號', '建物型態', '屋齡', '主要建材', 
             '管理組織', '總樓層數', '房數', '廳數', '衛數',
             '隔間', '土地坪數', '建物坪數',# '附屬建物坪數', '陽台坪數',
-            '總價元', '車位坪數', '車位總價元', '車位類別'
+            '總價元', '車位坪數', '車位總價元', '車位類別','車位坪單價'
         ]]
         return df
 
@@ -259,7 +259,7 @@ class RealEstateAnalyzer:
 if __name__ == "__main__":
     analyzer = RealEstateAnalyzer()
     #analyzer.real_estate_crawler(101, 3)   # 取得特定季資料
-    #analyzer.get_range(101, 104)  # 取得特定範圍資料
+    #analyzer.get_range(102, 111)  # 取得特定範圍資料
 
     all_data_1 = analyzer.read_real_estate_data(type_name="中古屋") #建立各季度 json檔
     #all_data_2 = analyzer.read_real_estate_data(type_name="新成屋") #建立各季度 json檔
