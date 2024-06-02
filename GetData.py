@@ -151,13 +151,8 @@ class RealEstateAnalyzer:
         return now - year
 
 
-    def preprocess_data(self, df):
-        df = df.copy()
-        df = df[df['備註'].isnull()]  # 刪除有備註之交易（多為親友交易、價格不正常之交易）
-
-        # 單位換算
-        df['每坪單價'] = df['單價元平方公尺'].astype(float) * 3.30579 # 平方公尺換成坪
-
+    def unit_conversion(self, df):
+        df['每坪單價'] = df['單價元平方公尺'].astype(float) * 3.30579
         try:
             df['土地坪數'] = df['土地移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
         except:
@@ -175,12 +170,12 @@ class RealEstateAnalyzer:
                 df['車位坪數'] = df['車位移轉總面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
             except:
                 df['車位坪數'] = df['車位面積平方公尺'].astype(float) * 0.3025 # 平方公尺換成坪
-        
         df['車位坪單價'] = df['車位總價元'].astype(int) / df['車位坪數'].astype(int)
-        #df['陽台坪數'] = df['陽台面積'].astype(float) * 0.3025 # 平方公尺換成坪
-        #df['附屬建物坪數'] = df['附屬建物面積'].astype(float) * 0.3025 # 平方公尺換成坪
         df['屋齡'] = df['建築完成年月'].apply(self.calculate_building_age)
+        return df
 
+
+    def type_conversion(self, df):
         # 型別轉換
         df['建物型態'] = df['建物型態'].str.split('(').str[0] # 建物型態
         df['建物現況格局-隔間'] = df['建物現況格局-隔間'].map({'有': True, '無': False})
@@ -188,8 +183,46 @@ class RealEstateAnalyzer:
         df['總樓層數'] = df['總樓層數'].apply(self.chinese_to_arabic)        # 將"總樓層數"列應用轉換函數
         df['都市土地使用分區'] = df['都市土地使用分區'].str.replace('[^\u4e00-\u9fff]+', '').str.split('其他:').str[-1].str.replace(r'\([^()]*\)', '').fillna("特")
         df['都市土地使用分區'] = df['都市土地使用分區'].replace(df['都市土地使用分區'].value_counts()[df['都市土地使用分區'].value_counts() < 100].index, '特')
-        # 假设需要统一的映射关系如下
-        mapping = {
+        df['主要建材'] = df['主要建材'].replace(df['主要建材'].value_counts()[df['主要建材'].value_counts() < 50].index, '特')
+        
+        return df
+
+
+    def map_land_type(self, df):
+        land_mapping = {
+            '住': '住宅區',
+            '其他': '其他用地',
+            '商': '商業區',
+            '工': '工業區',
+            '特': '特定用途地區',
+            '農': '農業區',
+            '第五種新市政中心': '新市政專用區',
+            '特貿四': '特定貿易區',
+            None: '其他用地',
+            '科技商務服務專用區': '科技商務區',
+            '第二種特定商業專用區': '特定商業專用區',
+        }
+        df['都市土地使用分區'] = df['都市土地使用分區'].map(land_mapping)
+        return df
+
+
+    def map_parking_type(self, df):
+        parking_mapping = {
+            '坡道機械': '機械',
+            None: '無車位',
+            '升降機械': '機械',
+            '塔式車位': '塔式',
+            '升降平面': '平面',
+            '坡道平面': '平面',
+            '一樓平面': '平面',
+            '其他': '其他'
+        }
+        df['車位類別'] = df['車位類別'].map(parking_mapping)
+        return df
+
+
+    def map_building_type(self, df):
+        building_mapping = {
             "鋼筋混凝土造": "RC",
             "鋼筋混凝土構造": "RC",
             "鋼筋混凝土加強磚造": "RC",
@@ -200,7 +233,6 @@ class RealEstateAnalyzer:
             "R.C造": "RC",
             "鋼筋混凝土（ＲＣ）": "RC",
             "鋼筋混凝土加強空心磚造": "RC",
-            
             "鋼骨構造、鋼骨鋼筋混凝土構造、鋼筋混凝土構造": "SRC",
             "鋼骨鋼筋混凝土造": "SRC",
             "鋼骨鋼筋混凝土構造": "SRC",
@@ -208,19 +240,29 @@ class RealEstateAnalyzer:
             "鋼骨鋼筋混凝土構造、鋼筋混凝土構造": "SRC",
             "鋼筋混凝土造、鋼骨造": "SRC",
             "鋼骨構造、鋼骨鋼筋混凝土構造": "SRC",
-
             "鋼骨混凝土造": "SC",
             "鋼骨造": "SC",
             "鋼骨構造": "SC",
-            
+            None: "SC",
             "見其它登記事項":"特",
             "見其他登記事項":"特",
             "見使用執照":"特",
-
         }
-        df['主要建材'] = df['主要建材'].replace(df['主要建材'].value_counts()[df['主要建材'].value_counts() < 50].index, '特')
-        # 使用replace函数进行映射替换
-        df['主要建材'] = df['主要建材'].replace(mapping)
+        df['主要建材'] = df['主要建材'].replace(building_mapping)
+        return df
+    
+
+    def preprocess_data(self, df):
+        df = df.copy()
+        df = df[df['備註'].isnull()]  # 刪除有備註之交易（多為親友交易、價格不正常之交易）
+
+        df = self.unit_conversion(df)
+        df = self.type_conversion(df)
+        df = self.map_land_type(df)
+        df = self.map_parking_type(df)
+        df = self.map_building_type(df)
+        
+
 
         # 刪除列
         for col in ['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']:
@@ -232,8 +274,7 @@ class RealEstateAnalyzer:
         #df = df.drop(columns=['交易標的', '交易筆棟數', '移轉層次', '移轉編號', '電梯', '非都市土地使用分區', '非都市土地使用編定', '備註']).copy()               
         df = df.rename(columns={'建物現況格局-隔間': '隔間', '有無管理組織': '管理組織', '建物現況格局-廳': '廳數',
                                 '建物現況格局-房': '房數', '建物現況格局-衛': '衛數', '都市土地使用分區': '土地類型'})
-        # 將index改成年月日
-        #df.index = pd.to_datetime((df['交易年月日'][:-4].astype(int) + 1911).astype(str) + df['交易年月日'].str[-4:], format='%Y%m%d', errors='coerce')
+
         df = df[[
             'year', 'season', '縣市', '鄉鎮市區','土地類型','每坪單價',
             '土地位置建物門牌',  '編號', '建物型態', '屋齡', '主要建材', 
@@ -241,7 +282,26 @@ class RealEstateAnalyzer:
             '隔間', '土地坪數', '建物坪數',# '附屬建物坪數', '陽台坪數',
             '總價元', '車位坪數', '車位總價元', '車位類別','車位坪單價'
         ]]
+        
+        df = self.calculate_interval(df, "屋齡", 10)
+        df = self.calculate_interval(df, ["房數", "廳數", "衛數", "總樓層數"], 1)
+            
         return df
+
+
+    def calculate_interval(self, df, cols, x):
+        if isinstance(cols, str):
+            cols = [cols]
+        for col in cols:
+            df[col] = df[col].fillna(0).astype(int)  # 填充 NaN 值
+            df[col] = df[col].apply(lambda val: val if val >= 0 else 0)  # 将负值设为 0
+            df[col] = df[col] // x * x  # 将列的值按 x 的倍数取整
+            df.loc[df[col] >= x * 10, col] = x * 10  # 将剩余的 NaN 值填充为 x*10
+        return df  # 返回修改后的 DataFrame
+
+
+
+
 
 
     def plot_price_trend(self, df):
